@@ -1,0 +1,22 @@
+# Ignore build output
+.next
+dist
+
+# Ignore all node modules
+node_modules
+
+# Ignore environment files
+.env
+.env.* 
+
+# Ignore lockfiles
+pnpm-lock.yaml
+yarn.lock
+package-lock.json
+
+# Ignore Prisma Client output
+prisma/generated
+
+# Ignore compiled artifacts
+*.out.*
+*.log

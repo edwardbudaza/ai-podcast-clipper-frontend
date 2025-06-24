@@ -1,0 +1,2776 @@
+
+
+// ===== FILE: src/app/page.tsx =====
+
+import Link from 'next/link';
+
+export default function HomePage() {
+  return (
+    <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-[#2e026d] to-[#15162c] text-white">
+      <div className="container flex flex-col items-center justify-center gap-12 px-4 py-16">
+        <h1 className="text-5xl font-extrabold tracking-tight text-white sm:text-[5rem]">
+          Create <span className="text-[hsl(280,100%,70%)]">T3</span> App
+        </h1>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-8">
+          <Link
+            className="flex max-w-xs flex-col gap-4 rounded-xl bg-white/10 p-4 text-white hover:bg-white/20"
+            href="https://create.t3.gg/en/usage/first-steps"
+            target="_blank"
+          >
+            <h3 className="text-2xl font-bold">First Steps →</h3>
+            <div className="text-lg">
+              Just the basics - Everything you need to know to set up your database and
+              authentication.
+            </div>
+          </Link>
+          <Link
+            className="flex max-w-xs flex-col gap-4 rounded-xl bg-white/10 p-4 text-white hover:bg-white/20"
+            href="https://create.t3.gg/en/introduction"
+            target="_blank"
+          >
+            <h3 className="text-2xl font-bold">Documentation →</h3>
+            <div className="text-lg">
+              Learn more about Create T3 App, the libraries it uses, and how to deploy it.
+            </div>
+          </Link>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+
+// ===== FILE: src/app/api/inngest/route.ts =====
+
+import { serve } from 'inngest/next';
+import { inngest } from '../../../inngest/client';
+import { processVideo } from '../../../inngest/functions';
+
+export const { GET, POST, PUT } = serve({
+  client: inngest,
+  functions: [processVideo],
+});
+
+
+// ===== FILE: src/app/api/auth/[...nextauth]/route.ts =====
+
+import { handlers } from '~/server/auth';
+
+export const { GET, POST } = handlers;
+
+
+// ===== FILE: src/app/(auth)/signup/page.tsx =====
+
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { auth } from '~/server/auth';
+import { SignupForm } from '~/components/auth/signup-form';
+
+export default async function SignupPage() {
+  const session = await auth();
+
+  if (session) {
+    redirect('/dashboard');
+  }
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+      <div className="w-full max-w-md space-y-6">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold">Create your account</h1>
+          <p className="mt-2 text-gray-600">
+            Already have an account?{' '}
+            <Link href="/login" className="text-blue-600 hover:underline">
+              Sign in
+            </Link>
+          </p>
+        </div>
+        <SignupForm />
+      </div>
+    </div>
+  );
+}
+
+
+// ===== FILE: src/app/(auth)/login/page.tsx =====
+
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { auth } from '~/server/auth';
+import { LoginForm } from '~/components/auth/login-form';
+
+export default async function LoginPage() {
+  const session = await auth();
+
+  if (session) {
+    redirect('/dashboard');
+  }
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+      <div className="w-full max-w-md space-y-6">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold">Welcome back</h1>
+          <p className="mt-2 text-gray-600">
+            Don't have an account?{' '}
+            <Link href="/signup" className="text-blue-600 hover:underline">
+              Sign up
+            </Link>
+          </p>
+        </div>
+        <LoginForm />
+      </div>
+    </div>
+  );
+}
+
+
+// ===== FILE: src/app/layout.tsx =====
+
+import '~/styles/globals.css';
+import { Inter } from 'next/font/google';
+import { Toaster } from '~/components/ui/sonner';
+import { SessionProvider } from 'next-auth/react';
+import { auth } from '~/server/auth';
+
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-sans',
+});
+
+export const metadata = {
+  title: 'ClipMatic',
+  description: 'Create engaging podcast clips with AI',
+  icons: [{ rel: 'icon', url: '/favicon.ico' }],
+};
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const session = await auth();
+
+  return (
+    <html lang="en">
+      <body className={`font-sans ${inter.variable}`}>
+        <SessionProvider session={session}>
+          {children}
+          <Toaster />
+        </SessionProvider>
+      </body>
+    </html>
+  );
+}
+
+
+// ===== FILE: src/app/(main)/layout.tsx =====
+
+"use server";
+
+import { redirect } from "next/navigation";
+import type { ReactNode } from "react";
+import NavHeader from "~/components/main/nav-header";
+import { Toaster } from "~/components/ui/sonner";
+import { auth } from "~/server/auth";
+import { db } from "~/server/db";
+
+export default async function DashboardLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const session = await auth();
+
+  if (!session?.user?.id) {
+    redirect("/login");
+  }
+
+  const user = await db.user.findUniqueOrThrow({
+    where: { id: session.user.id },
+    select: { credits: true, email: true },
+  });
+
+  return (
+    <div className="flex min-h-screen flex-col">
+      <NavHeader credits={user.credits} email={user.email} />
+      <main className="container mx-auto flex-1 py-6">{children}</main>
+      <Toaster />
+    </div>
+  );
+}
+
+// ===== FILE: src/app/(main)/dashboard/page.tsx =====
+
+"use server";
+
+import { redirect } from "next/navigation";
+import { DashboardClient } from "~/components/main/dashboard-client";
+import { auth } from "~/server/auth";
+import { db } from "~/server/db";
+
+export default async function DashboardPage() {
+  const session = await auth();
+
+  if (!session?.user?.id) {
+    redirect("/login");
+  }
+
+  const userData = await db.user.findUniqueOrThrow({
+    where: { id: session.user.id },
+    select: {
+      uploadedFiles: {
+        where: {
+          uploaded: true,
+        },
+        select: {
+          id: true,
+          s3Key: true,
+          displayName: true,
+          status: true,
+          createdAt: true,
+          _count: {
+            select: {
+              clips: true,
+            },
+          },
+        },
+      },
+      clips: {
+        orderBy: {
+          createdAt: "desc",
+        },
+      },
+    },
+  });
+
+  const formattedFiles = userData.uploadedFiles.map((file) => ({
+    id: file.id,
+    s3Key: file.s3Key,
+    filename: file.displayName ?? "Unkown filename",
+    status: file.status,
+    clipsCount: file._count.clips,
+    createdAt: file.createdAt,
+  }));
+
+  return (
+    <DashboardClient uploadedFiles={formattedFiles} clips={userData.clips} />
+  );
+}
+
+// ===== FILE: src/app/(main)/dashboard/loading.tsx =====
+
+import { Loader2 } from "lucide-react";
+
+export default function Loading() {
+  return (
+    <div className="flex flex-col items-center justify-center gap-5 p-12">
+      <Loader2 className="text-muted-foreground h-10 w-10 animate-spin" />
+      <span className="ml-3 text-lg">Loading dashboard...</span>
+    </div>
+  );
+}
+
+// ===== FILE: src/app/(main)/billing/page.tsx =====
+
+"use client";
+
+import type { VariantProps } from "class-variance-authority";
+import { ArrowLeftIcon, CheckIcon } from "lucide-react";
+import Link from "next/link";
+import { createCheckoutSession, type PriceId } from "~/actions/stripe";
+import { Button, buttonVariants } from "~/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "~/components/ui/card";
+import { cn } from "~/lib/utils";
+
+interface PricingPlan {
+  title: string;
+  price: string;
+  description: string;
+  features: string[];
+  buttonText: string;
+  buttonVariant: VariantProps<typeof buttonVariants>["variant"];
+  isPopular?: boolean;
+  savePercentage?: string;
+  priceId: PriceId;
+}
+
+const plans: PricingPlan[] = [
+  {
+    title: "Small Pack",
+    price: "$9.99",
+    description: "Perfect for occasional podcast creators",
+    features: ["50 credits", "No expiration", "Download all clips"],
+    buttonText: "Buy 50 credits",
+    buttonVariant: "outline",
+    priceId: "small",
+  },
+  {
+    title: "Medium Pack",
+    price: "$24.99",
+    description: "Best value for regular podcasters",
+    features: ["150 credits", "No expiration", "Download all clips"],
+    buttonText: "Buy 150 credits",
+    buttonVariant: "default",
+    isPopular: true,
+    savePercentage: "Save 17%",
+    priceId: "medium",
+  },
+  {
+    title: "Large Pack",
+    price: "$69.99",
+    description: "Ideal for podcast studioes and agencies",
+    features: ["500 credits", "No expiration", "Download all clips"],
+    buttonText: "Buy 500 credits",
+    buttonVariant: "outline",
+    isPopular: false,
+    savePercentage: "Save 30%",
+    priceId: "large",
+  },
+];
+
+function PricingCard({ plan }: { plan: PricingPlan }) {
+  return (
+    <Card
+      className={cn(
+        "relative flex flex-col",
+        plan.isPopular && "border-primary border-2",
+      )}
+    >
+      {plan.isPopular && (
+        <div className="bg-primary text-primary-foreground absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 transform rounded-full px-3 py-1 text-sm font-medium whitespace-nowrap">
+          Most Popular
+        </div>
+      )}
+      <CardHeader className="flex-1">
+        <CardTitle>{plan.title}</CardTitle>
+        <div className="text-4xl font-bold">{plan.price} </div>
+        {plan.savePercentage && (
+          <p className="text-sm font-medium text-green-600">
+            {plan.savePercentage}
+          </p>
+        )}
+        <CardDescription>{plan.description}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <ul className="text-muted-foreground space-y-2 text-sm">
+          {plan.features.map((feature, index) => (
+            <li key={index} className="flex items-center gap-2">
+              <CheckIcon className="text-primary size-4" />
+              {feature}
+            </li>
+          ))}
+        </ul>
+      </CardContent>
+      <CardFooter>
+        <form
+          action={() => createCheckoutSession(plan.priceId)}
+          className="w-full"
+        >
+          <Button variant={plan.buttonVariant} className="w-full" type="submit">
+            {plan.buttonText}
+          </Button>
+        </form>
+      </CardFooter>
+    </Card>
+  );
+}
+
+export default function BillingPage() {
+  return (
+    <div className="mx-auto flex flex-col space-y-8 px-4 py-12">
+      <div className="relative flex items-center justify-center gap-4">
+        <Button
+          className="absolute top-0 left-0"
+          variant="outline"
+          size="icon"
+          asChild
+        >
+          <Link href="/dashboard">
+            <ArrowLeftIcon className="size-4" />
+          </Link>
+        </Button>
+        <div className="space-y-2 text-center">
+          <h1 className="text-2xl font-bold tracking-tight sm:text-4xl">
+            Buy Credits
+          </h1>
+          <p className="text-muted-foreground">
+            Purchase credits to generate more podcast clips. The more credtis
+            you buy, the better the value.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
+        {plans.map((plan) => (
+          <PricingCard key={plan.title} plan={plan} />
+        ))}
+      </div>
+
+      <div className="bg-muted/50 rounded-lg p-6">
+        <h3 className="mb-4 text-lg font-semibold">How credits work</h3>
+        <ul className="text-muted-foreground list-disc space-y-2 pl-5 text-sm">
+          <li>1 credit = 1 minute of podcast processing</li>
+          <li>
+            The program will create around 1 clip per 5 minutes of podcast
+          </li>
+          <li>Credits never expire and can be used anytime</li>
+          <li>Longer podcasts require more credits based on duration</li>
+          <li>All packages are one-time purchases (not subscription)</li>
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+// ===== FILE: src/services/s3-services.ts =====
+
+import { ListObjectsV2Command, S3Client } from '@aws-sdk/client-s3';
+import { env } from '~/env';
+
+class S3Service {
+  private client: S3Client;
+
+  constructor() {
+    this.client = new S3Client({
+      region: env.AWS_REGION,
+      credentials: {
+        accessKeyId: env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+      },
+    });
+  }
+
+  async listObjectsByPrefix(prefix: string): Promise<string[]> {
+    const command = new ListObjectsV2Command({
+      Bucket: env.S3_BUCKET_NAME,
+      Prefix: prefix,
+    });
+
+    const response = await this.client.send(command);
+    return (
+      response.Contents?.map((item) => item.Key).filter((key): key is string => Boolean(key)) ?? []
+    );
+  }
+
+  getClipKeys(allKeys: string[]): string[] {
+    return allKeys.filter(
+      (key): key is string => key !== undefined && !key.endsWith('original.mp4'),
+    );
+  }
+
+  getFolderPrefix(s3Key: string): string {
+    const prefix = s3Key.split('/')[0];
+    if (!prefix) {
+      throw new Error(`Invalid S3 key format: ${s3Key}`);
+    }
+
+    return prefix;
+  }
+}
+
+export const s3Service = new S3Service();
+
+
+// ===== FILE: src/services/database-service.ts =====
+
+import { db } from '~/server/db';
+import type { UserCreditsData, FileStatus } from '~/types/video-pocessing';
+
+class DatabaseService {
+  async getUserCreditsAndS3Key(uploadedFileId: string): Promise<UserCreditsData> {
+    const uploadedFile = await db.uploadedFile.findUniqueOrThrow({
+      where: { id: uploadedFileId },
+      select: {
+        user: {
+          select: {
+            id: true,
+            credits: true,
+          },
+        },
+        s3Key: true,
+      },
+    });
+
+    return {
+      userId: uploadedFile.user.id,
+      credits: uploadedFile.user.credits,
+      s3Key: uploadedFile.s3Key,
+    };
+  }
+
+  async updateFileStatus(uploadedFileId: string, status: FileStatus): Promise<void> {
+    await db.uploadedFile.update({
+      where: { id: uploadedFileId },
+      data: { status },
+    });
+  }
+
+  async createClips(clipKeys: string[], uploadedFileId: string, userId: string): Promise<number> {
+    if (clipKeys.length === 0) return 0;
+
+    await db.clip.createMany({
+      data: clipKeys.map((clipKey) => ({
+        s3Key: clipKey,
+        uploadedFileId,
+        userId,
+      })),
+    });
+
+    return clipKeys.length;
+  }
+
+  async deductUserCredits(userId: string, creditsToDeduct: number): Promise<void> {
+    await db.user.update({
+      where: { id: userId },
+      data: {
+        credits: {
+          decrement: creditsToDeduct,
+        },
+      },
+    });
+  }
+}
+
+export const databaseService = new DatabaseService();
+
+
+// ===== FILE: src/services/video-processing-service.ts =====
+
+import { env } from '~/env';
+
+class VideoProcessingService {
+  async processVideo(s3Key: string): Promise<void> {
+    const response = await fetch(env.PROCESS_VIDEO_ENDPOINT, {
+      method: 'POST',
+      body: JSON.stringify({ s3_key: s3Key }),
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${env.PROCESS_VIDEO_ENDPOINT_AUTH}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Video processing failed: ${response.status} ${response.statusText}`);
+    }
+  }
+}
+
+export const videoProcessingService = new VideoProcessingService();
+
+
+// ===== FILE: src/actions/generation.ts =====
+
+"use server";
+
+import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { revalidatePath } from "next/cache";
+import { env } from "~/env";
+import { inngest } from "~/inngest/client";
+import { auth } from "~/server/auth";
+import { db } from "~/server/db";
+
+export async function processVideo(uploadedFileId: string) {
+  const uploadedVideo = await db.uploadedFile.findUniqueOrThrow({
+    where: {
+      id: uploadedFileId,
+    },
+    select: {
+      uploaded: true,
+      id: true,
+      userId: true,
+    },
+  });
+
+  if (uploadedVideo.uploaded) return;
+
+  await inngest.send({
+    name: "process-video-events",
+    data: { uploadedFileId: uploadedVideo.id, userId: uploadedVideo.userId },
+  });
+
+  await db.uploadedFile.update({
+    where: {
+      id: uploadedFileId,
+    },
+    data: {
+      uploaded: true,
+    },
+  });
+
+  revalidatePath("/dashboard");
+}
+
+export async function getClipPlayUrl(
+  clipId: string,
+): Promise<{ succes: boolean; url?: string; error?: string }> {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return { succes: false, error: "Unauthorized" };
+  }
+
+  try {
+    const clip = await db.clip.findUniqueOrThrow({
+      where: {
+        id: clipId,
+        userId: session.user.id,
+      },
+    });
+
+    const s3Client = new S3Client({
+      region: env.AWS_REGION,
+      credentials: {
+        accessKeyId: env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+      },
+    });
+
+    const command = new GetObjectCommand({
+      Bucket: env.S3_BUCKET_NAME,
+      Key: clip.s3Key,
+    });
+
+    const signedUrl = await getSignedUrl(s3Client, command, {
+      expiresIn: 3600,
+    });
+
+    return { succes: true, url: signedUrl };
+  } catch (error) {
+    return { succes: false, error: "Failed to generate play URL." };
+  }
+}
+
+// ===== FILE: src/actions/s3.ts =====
+
+"use server";
+
+import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { env } from "~/env";
+import { auth } from "~/server/auth";
+import { v4 as uuidv4 } from "uuid";
+import { db } from "~/server/db";
+
+export async function generateUploadUrl(fileInfo: {
+  filename: string;
+  contentType: string;
+}): Promise<{
+  success: boolean;
+  signedUrl: string;
+  key: string;
+  uploadedFileId: string;
+}> {
+  const session = await auth();
+  if (!session) throw new Error("Unauthorized");
+
+  const s3Client = new S3Client({
+    region: env.AWS_REGION,
+    credentials: {
+      accessKeyId: env.AWS_ACCESS_KEY_ID,
+      secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+    },
+  });
+
+  const fileExtension = fileInfo.filename.split(".").pop() ?? "";
+
+  const uniqueId = uuidv4();
+  const key = `${uniqueId}/original.${fileExtension}`;
+
+  const command = new PutObjectCommand({
+    Bucket: env.S3_BUCKET_NAME,
+    Key: key,
+    ContentType: fileInfo.contentType,
+  });
+
+  const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 600 });
+
+  const uploadedFileDbRecord = await db.uploadedFile.create({
+    data: {
+      userId: session.user.id,
+      s3Key: key,
+      displayName: fileInfo.filename,
+      uploaded: false,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  return {
+    success: true,
+    signedUrl,
+    key,
+    uploadedFileId: uploadedFileDbRecord.id,
+  };
+}
+
+// ===== FILE: src/actions/auth.ts =====
+
+'use server';
+
+import { hashPassword } from '~/lib/auth';
+import { signupSchema, type SignupFormValues } from '~/schemas/auth';
+import { db } from '~/server/db';
+import Stripe from 'stripe';
+import { env } from '~/env';
+
+type SignupResult = {
+  success: boolean;
+  error?: string;
+};
+
+export async function signUp(data: SignupFormValues): Promise<SignupResult> {
+  const validationResult = signupSchema.safeParse(data);
+  if (!validationResult.success) {
+    return {
+      success: false,
+      error: validationResult.error.issues[0]?.message ?? 'Invalid input',
+    };
+  }
+
+  const { email, password } = validationResult.data;
+
+  try {
+    const existingUser = await db.user.findUnique({ where: { email } });
+
+    if (existingUser) {
+      return {
+        success: false,
+        error: 'Email already in use',
+      };
+    }
+
+    const hashedPassword = await hashPassword(password);
+
+    const stripe = new Stripe(env.STRIPE_SECRET_KEY);
+
+    const stripeCustomer = await stripe.customers.create({
+      email: email.toLowerCase(),
+    });
+
+    await db.user.create({
+      data: {
+        email,
+        password: hashedPassword,
+        stripeCustomerId: stripeCustomer.id,
+      },
+    });
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: 'An error occured during signup' };
+  }
+}
+
+
+// ===== FILE: src/actions/stripe.ts =====
+
+"use server";
+
+import { redirect } from "next/navigation";
+import Stripe from "stripe";
+import { env } from "~/env";
+import { auth } from "~/server/auth";
+import { db } from "~/server/db";
+
+const stripe = new Stripe(env.STRIPE_SECRET_KEY, {
+  apiVersion: "2025-05-28.basil",
+});
+
+export type PriceId = "small" | "medium" | "large";
+
+const PRICE_IDS: Record<PriceId, string> = {
+  small: env.STRIPE_SMALL_CREDIT_PACK,
+  medium: env.STRIPE_MEDIUM_CREDIT_PACK,
+  large: env.STRIPE_LARGE_CREDIT_PACK,
+};
+
+export async function createCheckoutSession(priceId: PriceId) {
+  const serverSession = await auth();
+
+  const user = await db.user.findUniqueOrThrow({
+    where: {
+      id: serverSession?.user.id,
+    },
+    select: { stripeCustomerId: true },
+  });
+
+  if (!user.stripeCustomerId) {
+    throw new Error("User has no stripeCustomerId");
+  }
+
+  const session = await stripe.checkout.sessions.create({
+    line_items: [{ price: PRICE_IDS[priceId], quantity: 1 }],
+    customer: user.stripeCustomerId,
+    mode: "payment",
+    success_url: `${env.BASE_URL}/dashboard?success=true`,
+  });
+
+  if (!session.url) {
+    throw new Error("Failed to create session URL");
+  }
+
+  redirect(session.url);
+}
+
+// ===== FILE: src/components/ui/label.tsx =====
+
+'use client';
+
+import * as React from 'react';
+import * as LabelPrimitive from '@radix-ui/react-label';
+
+import { cn } from '~/lib/utils';
+
+function Label({ className, ...props }: React.ComponentProps<typeof LabelPrimitive.Root>) {
+  return (
+    <LabelPrimitive.Root
+      data-slot="label"
+      className={cn(
+        'flex items-center gap-2 text-sm leading-none font-medium select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+export { Label };
+
+
+// ===== FILE: src/components/ui/sonner.tsx =====
+
+'use client';
+
+import { useTheme } from 'next-themes';
+import { Toaster as Sonner, ToasterProps } from 'sonner';
+
+const Toaster = ({ ...props }: ToasterProps) => {
+  const { theme = 'system' } = useTheme();
+
+  return (
+    <Sonner
+      theme={theme as ToasterProps['theme']}
+      className="toaster group"
+      style={
+        {
+          '--normal-bg': 'var(--popover)',
+          '--normal-text': 'var(--popover-foreground)',
+          '--normal-border': 'var(--border)',
+        } as React.CSSProperties
+      }
+      {...props}
+    />
+  );
+};
+
+export { Toaster };
+
+
+// ===== FILE: src/components/ui/shadcn-io/dropzone/index.tsx =====
+
+import { Button } from '~/components/ui/button';
+import { cn } from '~/lib/utils';
+import { UploadIcon } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { createContext, useContext } from 'react';
+import { useDropzone } from 'react-dropzone';
+import type { DropEvent, DropzoneOptions, FileRejection } from 'react-dropzone';
+
+type DropzoneContextType = {
+  src?: File[];
+  accept?: DropzoneOptions['accept'];
+  maxSize?: DropzoneOptions['maxSize'];
+  minSize?: DropzoneOptions['minSize'];
+  maxFiles?: DropzoneOptions['maxFiles'];
+};
+
+const renderBytes = (bytes: number) => {
+  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+  let size = bytes;
+  let unitIndex = 0;
+
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex++;
+  }
+
+  return `${size.toFixed(2)}${units[unitIndex]}`;
+};
+
+const DropzoneContext = createContext<DropzoneContextType | undefined>(
+  undefined
+);
+
+export type DropzoneProps = Omit<DropzoneOptions, 'onDrop'> & {
+  src?: File[];
+  className?: string;
+  onDrop?: (
+    acceptedFiles: File[],
+    fileRejections: FileRejection[],
+    event: DropEvent
+  ) => void;
+  children?: ReactNode;
+};
+
+export const Dropzone = ({
+  accept,
+  maxFiles = 1,
+  maxSize,
+  minSize,
+  onDrop,
+  onError,
+  disabled,
+  src,
+  className,
+  children,
+  ...props
+}: DropzoneProps) => {
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    accept,
+    maxFiles,
+    maxSize,
+    minSize,
+    onError,
+    disabled,
+    onDrop: (acceptedFiles, fileRejections, event) => {
+      if (fileRejections.length > 0) {
+        const message = fileRejections.at(0)?.errors.at(0)?.message;
+        onError?.(new Error(message));
+        return;
+      }
+
+      onDrop?.(acceptedFiles, fileRejections, event);
+    },
+    ...props,
+  });
+
+  return (
+    <DropzoneContext.Provider
+      key={JSON.stringify(src)}
+      value={{ src, accept, maxSize, minSize, maxFiles }}
+    >
+      <Button
+        type="button"
+        disabled={disabled}
+        variant="outline"
+        className={cn(
+          'relative h-auto w-full flex-col overflow-hidden p-8',
+          isDragActive && 'outline-none ring-1 ring-ring',
+          className
+        )}
+        {...getRootProps()}
+      >
+        <input {...getInputProps()} disabled={disabled} />
+        {children}
+      </Button>
+    </DropzoneContext.Provider>
+  );
+};
+
+const useDropzoneContext = () => {
+  const context = useContext(DropzoneContext);
+
+  if (!context) {
+    throw new Error('useDropzoneContext must be used within a Dropzone');
+  }
+
+  return context;
+};
+
+export type DropzoneContentProps = {
+  children?: ReactNode;
+};
+
+const maxLabelItems = 3;
+
+export const DropzoneContent = ({ children }: DropzoneContentProps) => {
+  const { src } = useDropzoneContext();
+
+  if (!src) {
+    return null;
+  }
+
+  if (children) {
+    return children;
+  }
+
+  return (
+    <>
+      <div className="flex size-8 items-center justify-center rounded-md bg-muted text-muted-foreground">
+        <UploadIcon size={16} />
+      </div>
+      <p className="my-2 w-full truncate font-medium text-sm">
+        {src.length > maxLabelItems
+          ? `${new Intl.ListFormat('en').format(
+              src.slice(0, maxLabelItems).map((file) => file.name)
+            )} and ${src.length - maxLabelItems} more`
+          : new Intl.ListFormat('en').format(src.map((file) => file.name))}
+      </p>
+      <p className="w-full text-muted-foreground text-xs">
+        Drag and drop or click to replace
+      </p>
+    </>
+  );
+};
+
+export type DropzoneEmptyStateProps = {
+  children?: ReactNode;
+};
+
+export const DropzoneEmptyState = ({ children }: DropzoneEmptyStateProps) => {
+  const { src, accept, maxSize, minSize, maxFiles } = useDropzoneContext();
+
+  if (src) {
+    return null;
+  }
+
+  if (children) {
+    return children;
+  }
+
+  let caption = '';
+
+  if (accept) {
+    caption += 'Accepts ';
+    caption += new Intl.ListFormat('en').format(Object.keys(accept));
+  }
+
+  if (minSize && maxSize) {
+    caption += ` between ${renderBytes(minSize)} and ${renderBytes(maxSize)}`;
+  } else if (minSize) {
+    caption += ` at least ${renderBytes(minSize)}`;
+  } else if (maxSize) {
+    caption += ` less than ${renderBytes(maxSize)}`;
+  }
+
+  return (
+    <>
+      <div className="flex size-8 items-center justify-center rounded-md bg-muted text-muted-foreground">
+        <UploadIcon size={16} />
+      </div>
+      <p className="my-2 w-full truncate font-medium text-sm">
+        Upload {maxFiles === 1 ? 'a file' : 'files'}
+      </p>
+      <p className="w-full truncate text-muted-foreground text-xs">
+        Drag and drop or click to upload
+      </p>
+      {caption && <p className="text-muted-foreground text-xs">{caption}.</p>}
+    </>
+  );
+};
+
+
+// ===== FILE: src/components/ui/input.tsx =====
+
+import * as React from 'react';
+
+import { cn } from '~/lib/utils';
+
+function Input({ className, type, ...props }: React.ComponentProps<'input'>) {
+  return (
+    <input
+      type={type}
+      data-slot="input"
+      className={cn(
+        'file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
+        'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',
+        'aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+export { Input };
+
+
+// ===== FILE: src/components/ui/tabs.tsx =====
+
+'use client';
+
+import * as React from 'react';
+import * as TabsPrimitive from '@radix-ui/react-tabs';
+
+import { cn } from '~/lib/utils';
+
+function Tabs({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Root>) {
+  return (
+    <TabsPrimitive.Root
+      data-slot="tabs"
+      className={cn('flex flex-col gap-2', className)}
+      {...props}
+    />
+  );
+}
+
+function TabsList({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.List>) {
+  return (
+    <TabsPrimitive.List
+      data-slot="tabs-list"
+      className={cn(
+        'bg-muted text-muted-foreground inline-flex h-9 w-fit items-center justify-center rounded-lg p-[3px]',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Trigger>) {
+  return (
+    <TabsPrimitive.Trigger
+      data-slot="tabs-trigger"
+      className={cn(
+        "data-[state=active]:bg-background dark:data-[state=active]:text-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:outline-ring dark:data-[state=active]:border-input dark:data-[state=active]:bg-input/30 text-foreground dark:text-muted-foreground inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-sm font-medium whitespace-nowrap transition-[color,box-shadow] focus-visible:ring-[3px] focus-visible:outline-1 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:shadow-sm [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+function TabsContent({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Content>) {
+  return (
+    <TabsPrimitive.Content
+      data-slot="tabs-content"
+      className={cn('flex-1 outline-none', className)}
+      {...props}
+    />
+  );
+}
+
+export { Tabs, TabsList, TabsTrigger, TabsContent };
+
+
+// ===== FILE: src/components/ui/avatar.tsx =====
+
+'use client';
+
+import * as React from 'react';
+import * as AvatarPrimitive from '@radix-ui/react-avatar';
+
+import { cn } from '~/lib/utils';
+
+function Avatar({ className, ...props }: React.ComponentProps<typeof AvatarPrimitive.Root>) {
+  return (
+    <AvatarPrimitive.Root
+      data-slot="avatar"
+      className={cn('relative flex size-8 shrink-0 overflow-hidden rounded-full', className)}
+      {...props}
+    />
+  );
+}
+
+function AvatarImage({ className, ...props }: React.ComponentProps<typeof AvatarPrimitive.Image>) {
+  return (
+    <AvatarPrimitive.Image
+      data-slot="avatar-image"
+      className={cn('aspect-square size-full', className)}
+      {...props}
+    />
+  );
+}
+
+function AvatarFallback({
+  className,
+  ...props
+}: React.ComponentProps<typeof AvatarPrimitive.Fallback>) {
+  return (
+    <AvatarPrimitive.Fallback
+      data-slot="avatar-fallback"
+      className={cn('bg-muted flex size-full items-center justify-center rounded-full', className)}
+      {...props}
+    />
+  );
+}
+
+export { Avatar, AvatarImage, AvatarFallback };
+
+
+// ===== FILE: src/components/ui/card.tsx =====
+
+import * as React from 'react';
+
+import { cn } from '~/lib/utils';
+
+function Card({ className, ...props }: React.ComponentProps<'div'>) {
+  return (
+    <div
+      data-slot="card"
+      className={cn(
+        'bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+function CardHeader({ className, ...props }: React.ComponentProps<'div'>) {
+  return (
+    <div
+      data-slot="card-header"
+      className={cn(
+        '@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-1.5 px-6 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+function CardTitle({ className, ...props }: React.ComponentProps<'div'>) {
+  return (
+    <div
+      data-slot="card-title"
+      className={cn('leading-none font-semibold', className)}
+      {...props}
+    />
+  );
+}
+
+function CardDescription({ className, ...props }: React.ComponentProps<'div'>) {
+  return (
+    <div
+      data-slot="card-description"
+      className={cn('text-muted-foreground text-sm', className)}
+      {...props}
+    />
+  );
+}
+
+function CardAction({ className, ...props }: React.ComponentProps<'div'>) {
+  return (
+    <div
+      data-slot="card-action"
+      className={cn('col-start-2 row-span-2 row-start-1 self-start justify-self-end', className)}
+      {...props}
+    />
+  );
+}
+
+function CardContent({ className, ...props }: React.ComponentProps<'div'>) {
+  return <div data-slot="card-content" className={cn('px-6', className)} {...props} />;
+}
+
+function CardFooter({ className, ...props }: React.ComponentProps<'div'>) {
+  return (
+    <div
+      data-slot="card-footer"
+      className={cn('flex items-center px-6 [.border-t]:pt-6', className)}
+      {...props}
+    />
+  );
+}
+
+export { Card, CardHeader, CardFooter, CardTitle, CardAction, CardDescription, CardContent };
+
+
+// ===== FILE: src/components/ui/table.tsx =====
+
+'use client';
+
+import * as React from 'react';
+
+import { cn } from '~/lib/utils';
+
+function Table({ className, ...props }: React.ComponentProps<'table'>) {
+  return (
+    <div data-slot="table-container" className="relative w-full overflow-x-auto">
+      <table
+        data-slot="table"
+        className={cn('w-full caption-bottom text-sm', className)}
+        {...props}
+      />
+    </div>
+  );
+}
+
+function TableHeader({ className, ...props }: React.ComponentProps<'thead'>) {
+  return <thead data-slot="table-header" className={cn('[&_tr]:border-b', className)} {...props} />;
+}
+
+function TableBody({ className, ...props }: React.ComponentProps<'tbody'>) {
+  return (
+    <tbody
+      data-slot="table-body"
+      className={cn('[&_tr:last-child]:border-0', className)}
+      {...props}
+    />
+  );
+}
+
+function TableFooter({ className, ...props }: React.ComponentProps<'tfoot'>) {
+  return (
+    <tfoot
+      data-slot="table-footer"
+      className={cn('bg-muted/50 border-t font-medium [&>tr]:last:border-b-0', className)}
+      {...props}
+    />
+  );
+}
+
+function TableRow({ className, ...props }: React.ComponentProps<'tr'>) {
+  return (
+    <tr
+      data-slot="table-row"
+      className={cn(
+        'hover:bg-muted/50 data-[state=selected]:bg-muted border-b transition-colors',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+function TableHead({ className, ...props }: React.ComponentProps<'th'>) {
+  return (
+    <th
+      data-slot="table-head"
+      className={cn(
+        'text-foreground h-10 px-2 text-left align-middle font-medium whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+function TableCell({ className, ...props }: React.ComponentProps<'td'>) {
+  return (
+    <td
+      data-slot="table-cell"
+      className={cn(
+        'p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+function TableCaption({ className, ...props }: React.ComponentProps<'caption'>) {
+  return (
+    <caption
+      data-slot="table-caption"
+      className={cn('text-muted-foreground mt-4 text-sm', className)}
+      {...props}
+    />
+  );
+}
+
+export { Table, TableHeader, TableBody, TableFooter, TableHead, TableRow, TableCell, TableCaption };
+
+
+// ===== FILE: src/components/ui/button.tsx =====
+
+import * as React from 'react';
+import { Slot } from '@radix-ui/react-slot';
+import { cva, type VariantProps } from 'class-variance-authority';
+
+import { cn } from '~/lib/utils';
+
+const buttonVariants = cva(
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
+  {
+    variants: {
+      variant: {
+        default: 'bg-primary text-primary-foreground shadow-xs hover:bg-primary/90',
+        destructive:
+          'bg-destructive text-white shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60',
+        outline:
+          'border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50',
+        secondary: 'bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80',
+        ghost: 'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
+        link: 'text-primary underline-offset-4 hover:underline',
+      },
+      size: {
+        default: 'h-9 px-4 py-2 has-[>svg]:px-3',
+        sm: 'h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5',
+        lg: 'h-10 rounded-md px-6 has-[>svg]:px-4',
+        icon: 'size-9',
+      },
+    },
+    defaultVariants: {
+      variant: 'default',
+      size: 'default',
+    },
+  },
+);
+
+function Button({
+  className,
+  variant,
+  size,
+  asChild = false,
+  ...props
+}: React.ComponentProps<'button'> &
+  VariantProps<typeof buttonVariants> & {
+    asChild?: boolean;
+  }) {
+  const Comp = asChild ? Slot : 'button';
+
+  return (
+    <Comp
+      data-slot="button"
+      className={cn(buttonVariants({ variant, size, className }))}
+      {...props}
+    />
+  );
+}
+
+export { Button, buttonVariants };
+
+
+// ===== FILE: src/components/ui/dropdown-menu.tsx =====
+
+'use client';
+
+import * as React from 'react';
+import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
+import { CheckIcon, ChevronRightIcon, CircleIcon } from 'lucide-react';
+
+import { cn } from '~/lib/utils';
+
+function DropdownMenu({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
+  return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {...props} />;
+}
+
+function DropdownMenuPortal({
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Portal>) {
+  return <DropdownMenuPrimitive.Portal data-slot="dropdown-menu-portal" {...props} />;
+}
+
+function DropdownMenuTrigger({
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Trigger>) {
+  return <DropdownMenuPrimitive.Trigger data-slot="dropdown-menu-trigger" {...props} />;
+}
+
+function DropdownMenuContent({
+  className,
+  sideOffset = 4,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+  return (
+    <DropdownMenuPrimitive.Portal>
+      <DropdownMenuPrimitive.Content
+        data-slot="dropdown-menu-content"
+        sideOffset={sideOffset}
+        className={cn(
+          'bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 max-h-(--radix-dropdown-menu-content-available-height) min-w-[8rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-md border p-1 shadow-md',
+          className,
+        )}
+        {...props}
+      />
+    </DropdownMenuPrimitive.Portal>
+  );
+}
+
+function DropdownMenuGroup({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Group>) {
+  return <DropdownMenuPrimitive.Group data-slot="dropdown-menu-group" {...props} />;
+}
+
+function DropdownMenuItem({
+  className,
+  inset,
+  variant = 'default',
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Item> & {
+  inset?: boolean;
+  variant?: 'default' | 'destructive';
+}) {
+  return (
+    <DropdownMenuPrimitive.Item
+      data-slot="dropdown-menu-item"
+      data-inset={inset}
+      data-variant={variant}
+      className={cn(
+        "focus:bg-accent focus:text-accent-foreground data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 dark:data-[variant=destructive]:focus:bg-destructive/20 data-[variant=destructive]:focus:text-destructive data-[variant=destructive]:*:[svg]:!text-destructive [&_svg:not([class*='text-'])]:text-muted-foreground relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+function DropdownMenuCheckboxItem({
+  className,
+  children,
+  checked,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.CheckboxItem>) {
+  return (
+    <DropdownMenuPrimitive.CheckboxItem
+      data-slot="dropdown-menu-checkbox-item"
+      className={cn(
+        "focus:bg-accent focus:text-accent-foreground relative flex cursor-default items-center gap-2 rounded-sm py-1.5 pr-2 pl-8 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        className,
+      )}
+      checked={checked}
+      {...props}
+    >
+      <span className="pointer-events-none absolute left-2 flex size-3.5 items-center justify-center">
+        <DropdownMenuPrimitive.ItemIndicator>
+          <CheckIcon className="size-4" />
+        </DropdownMenuPrimitive.ItemIndicator>
+      </span>
+      {children}
+    </DropdownMenuPrimitive.CheckboxItem>
+  );
+}
+
+function DropdownMenuRadioGroup({
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.RadioGroup>) {
+  return <DropdownMenuPrimitive.RadioGroup data-slot="dropdown-menu-radio-group" {...props} />;
+}
+
+function DropdownMenuRadioItem({
+  className,
+  children,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.RadioItem>) {
+  return (
+    <DropdownMenuPrimitive.RadioItem
+      data-slot="dropdown-menu-radio-item"
+      className={cn(
+        "focus:bg-accent focus:text-accent-foreground relative flex cursor-default items-center gap-2 rounded-sm py-1.5 pr-2 pl-8 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        className,
+      )}
+      {...props}
+    >
+      <span className="pointer-events-none absolute left-2 flex size-3.5 items-center justify-center">
+        <DropdownMenuPrimitive.ItemIndicator>
+          <CircleIcon className="size-2 fill-current" />
+        </DropdownMenuPrimitive.ItemIndicator>
+      </span>
+      {children}
+    </DropdownMenuPrimitive.RadioItem>
+  );
+}
+
+function DropdownMenuLabel({
+  className,
+  inset,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Label> & {
+  inset?: boolean;
+}) {
+  return (
+    <DropdownMenuPrimitive.Label
+      data-slot="dropdown-menu-label"
+      data-inset={inset}
+      className={cn('px-2 py-1.5 text-sm font-medium data-[inset]:pl-8', className)}
+      {...props}
+    />
+  );
+}
+
+function DropdownMenuSeparator({
+  className,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Separator>) {
+  return (
+    <DropdownMenuPrimitive.Separator
+      data-slot="dropdown-menu-separator"
+      className={cn('bg-border -mx-1 my-1 h-px', className)}
+      {...props}
+    />
+  );
+}
+
+function DropdownMenuShortcut({ className, ...props }: React.ComponentProps<'span'>) {
+  return (
+    <span
+      data-slot="dropdown-menu-shortcut"
+      className={cn('text-muted-foreground ml-auto text-xs tracking-widest', className)}
+      {...props}
+    />
+  );
+}
+
+function DropdownMenuSub({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Sub>) {
+  return <DropdownMenuPrimitive.Sub data-slot="dropdown-menu-sub" {...props} />;
+}
+
+function DropdownMenuSubTrigger({
+  className,
+  inset,
+  children,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.SubTrigger> & {
+  inset?: boolean;
+}) {
+  return (
+    <DropdownMenuPrimitive.SubTrigger
+      data-slot="dropdown-menu-sub-trigger"
+      data-inset={inset}
+      className={cn(
+        'focus:bg-accent focus:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground flex cursor-default items-center rounded-sm px-2 py-1.5 text-sm outline-hidden select-none data-[inset]:pl-8',
+        className,
+      )}
+      {...props}
+    >
+      {children}
+      <ChevronRightIcon className="ml-auto size-4" />
+    </DropdownMenuPrimitive.SubTrigger>
+  );
+}
+
+function DropdownMenuSubContent({
+  className,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent>) {
+  return (
+    <DropdownMenuPrimitive.SubContent
+      data-slot="dropdown-menu-sub-content"
+      className={cn(
+        'bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-[8rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden rounded-md border p-1 shadow-lg',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+export {
+  DropdownMenu,
+  DropdownMenuPortal,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuItem,
+  DropdownMenuCheckboxItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+};
+
+
+// ===== FILE: src/components/ui/badge.tsx =====
+
+import * as React from 'react';
+import { Slot } from '@radix-ui/react-slot';
+import { cva, type VariantProps } from 'class-variance-authority';
+
+import { cn } from '~/lib/utils';
+
+const badgeVariants = cva(
+  'inline-flex items-center justify-center rounded-md border px-2 py-0.5 text-xs font-medium w-fit whitespace-nowrap shrink-0 [&>svg]:size-3 gap-1 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive transition-[color,box-shadow] overflow-hidden',
+  {
+    variants: {
+      variant: {
+        default: 'border-transparent bg-primary text-primary-foreground [a&]:hover:bg-primary/90',
+        secondary:
+          'border-transparent bg-secondary text-secondary-foreground [a&]:hover:bg-secondary/90',
+        destructive:
+          'border-transparent bg-destructive text-white [a&]:hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60',
+        outline: 'text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground',
+      },
+    },
+    defaultVariants: {
+      variant: 'default',
+    },
+  },
+);
+
+function Badge({
+  className,
+  variant,
+  asChild = false,
+  ...props
+}: React.ComponentProps<'span'> & VariantProps<typeof badgeVariants> & { asChild?: boolean }) {
+  const Comp = asChild ? Slot : 'span';
+
+  return (
+    <Comp data-slot="badge" className={cn(badgeVariants({ variant }), className)} {...props} />
+  );
+}
+
+export { Badge, badgeVariants };
+
+
+// ===== FILE: src/components/auth/login-form.tsx =====
+
+'use client';
+
+import { cn } from '~/lib/utils';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
+import { Input } from '~/components/ui/input';
+import { Label } from '~/components/ui/label';
+import { Button } from '~/components/ui/button';
+import { z } from 'zod';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useState } from 'react';
+import Link from 'next/link';
+import {
+  loginSchema,
+  signupSchema,
+  type LoginFormValues,
+  type SignupFormValues,
+} from '~/schemas/auth';
+import { signUp } from '~/actions/auth';
+import { signIn } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+
+export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRef<'div'>) {
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const router = useRouter();
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<LoginFormValues>({ resolver: zodResolver(loginSchema) });
+
+  const onSubmit = async (data: LoginFormValues) => {
+    try {
+      setIsSubmitting(true);
+      setError(null);
+
+      const signInResult = await signIn('credentials', {
+        email: data.email,
+        password: data.password,
+        redirect: false,
+      });
+
+      if (signInResult?.error) {
+        setError('Invalid email or password.');
+      } else {
+        router.push('/dashboard');
+      }
+    } catch (error) {
+      setError('An unexpected error occured');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className={cn('flex flex-col gap-6', className)} {...props}>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-2xl">Login</CardTitle>
+          <CardDescription>Enter your email below to log in to your account</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit(onSubmit)}>
+            <div className="flex flex-col gap-6">
+              <div className="grid gap-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="m@example.com"
+                  required
+                  {...register('email')}
+                />
+                {errors.email && <p className="text-sm text-red-500">{errors.email.message}</p>}
+              </div>
+              <div className="grid gap-2">
+                <div className="flex items-center">
+                  <Label htmlFor="password">Password</Label>
+                </div>
+                <Input id="password" type="password" required {...register('password')} />
+                {errors.password && (
+                  <p className="text-sm text-red-500">{errors.password.message}</p>
+                )}
+              </div>
+
+              {error && <p className="rounded-md bg-red-50 p-3 text-sm text-red-500">{error}</p>}
+
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? 'Logging in...' : 'Log in'}
+              </Button>
+            </div>
+            <div className="mt-4 text-center text-sm">
+              Don&apos;t have an account?{' '}
+              <Link href="/signup" className="underline underline-offset-4">
+                Sign up
+              </Link>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+
+// ===== FILE: src/components/auth/signup-form.tsx =====
+
+'use client';
+
+import { cn } from '~/lib/utils';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
+import { Input } from '~/components/ui/input';
+import { Label } from '~/components/ui/label';
+import { Button } from '~/components/ui/button';
+import { z } from 'zod';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useState } from 'react';
+import Link from 'next/link';
+import { signupSchema, type SignupFormValues } from '~/schemas/auth';
+import { signUp } from '~/actions/auth';
+import { signIn } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+
+export function SignupForm({ className, ...props }: React.ComponentPropsWithoutRef<'div'>) {
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const router = useRouter();
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<SignupFormValues>({ resolver: zodResolver(signupSchema) });
+
+  const onSubmit = async (data: SignupFormValues) => {
+    try {
+      setIsSubmitting(true);
+      setError(null);
+
+      const result = await signUp(data);
+      if (!result.success) {
+        setError(result.error ?? 'An error occured during signup');
+        return;
+      }
+
+      const signUpResult = await signIn('credentials', {
+        email: data.email,
+        password: data.password,
+        redirect: false,
+      });
+
+      if (signUpResult?.error) {
+        setError("Account created but couldn't sign in automatically. Please try again.");
+      } else {
+        router.push('/dashboard');
+      }
+    } catch (error) {
+      setError('An unexpected error occured');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className={cn('flex flex-col gap-6', className)} {...props}>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-2xl">Sign up</CardTitle>
+          <CardDescription>Enter your email below to sign up to your account</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit(onSubmit)}>
+            <div className="flex flex-col gap-6">
+              <div className="grid gap-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="m@example.com"
+                  required
+                  {...register('email')}
+                />
+                {errors.email && <p className="text-sm text-red-500">{errors.email.message}</p>}
+              </div>
+              <div className="grid gap-2">
+                <div className="flex items-center">
+                  <Label htmlFor="password">Password</Label>
+                </div>
+                <Input id="password" type="password" required {...register('password')} />
+                {errors.password && (
+                  <p className="text-sm text-red-500">{errors.password.message}</p>
+                )}
+              </div>
+
+              {error && <p className="rounded-md bg-red-50 p-3 text-sm text-red-500">{error}</p>}
+
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? 'Signing up...' : 'Sign up'}
+              </Button>
+            </div>
+            <div className="mt-4 text-center text-sm">
+              Already have an account?{' '}
+              <Link href="/login" className="underline underline-offset-4">
+                Sign in
+              </Link>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+
+// ===== FILE: src/components/main/dashboard-client.tsx =====
+
+"use client";
+
+import Dropzone, { type DropzoneState } from "shadcn-dropzone";
+import type { Clip } from "@prisma/client";
+import Link from "next/link";
+import { Button } from "~/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "~/components/ui/card";
+import { Loader2, UploadCloud } from "lucide-react";
+import { useState } from "react";
+import { generateUploadUrl } from "~/actions/s3";
+import { toast } from "sonner";
+import { processVideo } from "~/actions/generation";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
+import { Badge } from "~/components/ui/badge";
+import { useRouter } from "next/navigation";
+import { ClipDisplay } from "./clip-display";
+
+export function DashboardClient({
+  uploadedFiles,
+  clips,
+}: {
+  uploadedFiles: {
+    id: string;
+    s3Key: string;
+    filename: string;
+    status: string;
+    clipsCount: number;
+    createdAt: Date;
+  }[];
+  clips: Clip[];
+}) {
+  const [files, setFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const router = useRouter();
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    router.refresh();
+    setTimeout(() => setRefreshing(false), 600);
+  };
+
+  const handleDrop = (acceptedFiles: File[]) => {
+    setFiles(acceptedFiles);
+  };
+
+  const handleUpload = async () => {
+    if (files.length === 0) return;
+
+    const file = files[0]!;
+    setUploading(true);
+
+    try {
+      const { success, signedUrl, uploadedFileId } = await generateUploadUrl({
+        filename: file.name,
+        contentType: file.type,
+      });
+
+      if (!success) throw new Error("Failed to get upload URL");
+
+      const uploadResponse = await fetch(signedUrl, {
+        method: "PUT",
+        body: file,
+        headers: {
+          "Content-Type": file.type,
+        },
+      });
+
+      if (!uploadResponse.ok)
+        throw new Error(`Upload filed with status: ${uploadResponse.status}`);
+
+      await processVideo(uploadedFileId);
+
+      setFiles([]);
+
+      toast.success("Video uploaded successfully", {
+        description:
+          "Your video has been scheduled for processing. Check the status below.",
+        duration: 5000,
+      });
+    } catch (error) {
+      toast.error("Upload failed", {
+        description:
+          "There was a problem uploading your video. Please try again.",
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="mx-auto flex max-w-5xl flex-col space-y-6 px-4 py-8">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Podcast Clipper
+          </h1>
+          <p className="text-muted-foreground">
+            Upload your podcast and get AI-generated clips instantly
+          </p>
+        </div>
+        <Link href="/billing">
+          <Button>Buy Credits</Button>
+        </Link>
+      </div>
+
+      <Tabs defaultValue="upload">
+        <TabsList>
+          <TabsTrigger value="upload">Upload</TabsTrigger>
+          <TabsTrigger value="my-clips">My Clips</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="upload">
+          <Card>
+            <CardHeader>
+              <CardTitle>Upload Podcast</CardTitle>
+              <CardDescription>
+                Upload your audio or video file to generate clips
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Dropzone
+                onDrop={handleDrop}
+                accept={{ "video/mp4": [".mp4"] }}
+                maxSize={500 * 1024 * 1024}
+                disabled={uploading}
+                maxFiles={1}
+              >
+                {(dropzone: DropzoneState) => (
+                  <>
+                    <div className="flex flex-col items-center justify-center space-y-4 rounded-lg p-10 text-center">
+                      <UploadCloud className="text-muted-foreground h-12 w-12" />
+                      <p className="font-medium">Drag and drop your file</p>
+                      <p className="text-muted-foreground text-sm">
+                        or click to browse (MP4 up to 500MB)
+                      </p>
+                      <Button
+                        className="cursor-pointer"
+                        variant="default"
+                        size="sm"
+                        disabled={uploading}
+                      >
+                        Select File
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </Dropzone>
+
+              <div className="mt-2 flex items-start justify-between">
+                <div>
+                  {files.length > 0 && (
+                    <div className="space-y-1 text-sm">
+                      <p className="font-medium">Selected file:</p>
+                      {files.map((file) => (
+                        <p key={file.name} className="text-muted-foreground">
+                          {file.name}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <Button
+                  disabled={files.length === 0 || uploading}
+                  onClick={handleUpload}
+                >
+                  {uploading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    "Upload and Generate Clips"
+                  )}
+                </Button>
+              </div>
+
+              {uploadedFiles.length > 0 && (
+                <div className="pt-6">
+                  <div className="mb-2 flex items-center justify-between">
+                    <h3 className="text-md mb-2 font-medium">Queue status</h3>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRefresh}
+                      disabled={refreshing}
+                    >
+                      {refreshing && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      )}
+                      Refresh
+                    </Button>
+                  </div>
+                  <div className="max-h-[300px] overflow-auto rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>File</TableHead>
+                          <TableHead>Uploaded</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Clips created</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {uploadedFiles.map((item) => (
+                          <TableRow key={item.id}>
+                            <TableCell className="max-w-xs truncate font-medium">
+                              {item.filename}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground text-sm">
+                              {new Date(item.createdAt).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell>
+                              {item.status === "queued" && (
+                                <Badge variant="outline">Queued</Badge>
+                              )}
+                              {item.status === "processing" && (
+                                <Badge variant="outline">Processing</Badge>
+                              )}
+                              {item.status === "processed" && (
+                                <Badge variant="outline">Processed</Badge>
+                              )}
+                              {item.status === "no credits" && (
+                                <Badge variant="destructive">No credits</Badge>
+                              )}
+                              {item.status === "failed" && (
+                                <Badge variant="destructive">Failed</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {item.clipsCount > 0 ? (
+                                <span>
+                                  {item.clipsCount} clip
+                                  {item.clipsCount !== 1 ? "s" : ""}
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground">
+                                  No clips yet
+                                </span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="my-clips">
+          <Card>
+            <CardHeader>
+              <CardTitle>My Clips</CardTitle>
+              <CardDescription>
+                View and manage your generated clips here. Processing may take a
+                few minuntes.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ClipDisplay clips={clips} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+// ===== FILE: src/components/main/nav-header.tsx =====
+
+"use client";
+
+import Link from "next/link";
+import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback } from "~/components/ui/avatar";
+import { signOut } from "next-auth/react";
+import { useEffect } from "react";
+import { toast } from "sonner";
+
+const NavHeader = ({ credits, email }: { credits: number; email: string }) => {
+  return (
+    <header className="bg-background sticky top-0 z-10 flex justify-center border-b">
+      <div className="container flex h-16 items-center justify-between px-4 py-2">
+        <Link href="/dashboard" className="flex items-center">
+          <div className="font-sans text-xl font-medium tracking-tight">
+            <span className="text-foreground">clip</span>
+            <span className="font-light text-gray-500">/</span>
+            <span className="text-foreground font-light">matic</span>
+          </div>
+        </Link>
+
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Badge
+              variant="secondary"
+              className="h-8 px-3 py-1.5 text-xs font-medium"
+            >
+              {credits} credits
+            </Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              asChild
+              className="h-8 text-xs font-medium"
+            >
+              <Link href="/billing">Buy more</Link>
+            </Button>
+          </div>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                className="relative h-8 w-8 rounded-full p-0"
+              >
+                <Avatar>
+                  <AvatarFallback>{email.charAt(0)}</AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>
+                <p className="text-muted-foreground text-xs">{email}</p>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href="/billing">Billing</Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => signOut({ redirectTo: "/login" })}
+                className="text-destructive cursor-pointer"
+              >
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+    </header>
+  );
+};
+
+export default NavHeader;
+
+// ===== FILE: src/components/main/clip-display.tsx =====
+
+"use client";
+
+import type { Clip } from "@prisma/client";
+import { Download, Loader2, Play } from "lucide-react";
+import { useEffect, useState } from "react";
+import { getClipPlayUrl } from "~/actions/generation";
+import { Button } from "~/components/ui/button";
+
+function ClipCard({ clip }: { clip: Clip }) {
+  const [playUrl, setPlayUrl] = useState<string | null>(null);
+  const [isLoadingUrl, setIsLoadingUrl] = useState(true);
+
+  useEffect(() => {
+    async function fetchPlayUrl() {
+      try {
+        const result = await getClipPlayUrl(clip.id);
+        if (result.succes && result.url) {
+          setPlayUrl(result.url);
+        } else if (result.error) {
+          console.error("Failed to get play url: " + result.error);
+        }
+      } catch (error) {
+      } finally {
+        setIsLoadingUrl(false);
+      }
+    }
+
+    void fetchPlayUrl();
+  }, [clip.id]);
+
+  const handleDownload = () => {
+    if (playUrl) {
+      const link = document.createElement("a");
+      link.href = playUrl;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
+  return (
+    <div className="flex max-w-52 flex-col gap-2">
+      <div className="bg-muted">
+        {isLoadingUrl ? (
+          <div className="flex h-full w-full items-center justify-center">
+            <Loader2 className="text-muted-foreground h-8 w-8 animate-spin" />
+          </div>
+        ) : playUrl ? (
+          <video
+            src={playUrl}
+            controls
+            preload="metadata"
+            className="h-full w-full rounded-md object-cover"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center">
+            <Play className="text-muted-foreground h-10 w-10 opacity-50" />
+          </div>
+        )}
+      </div>
+      <div className="flex flex-col gap-2">
+        <Button onClick={handleDownload} variant="outline" size="sm">
+          <Download className="mr-1.5 h-4 w-4" />
+          Download
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+export function ClipDisplay({ clips }: { clips: Clip[] }) {
+  if (clips.length === 0) {
+    return (
+      <p className="text-muted-foreground p-4 text-center">
+        No clips generated yet.
+      </p>
+    );
+  }
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+      {clips.map((clip) => (
+        <ClipCard key={clip.id} clip={clip} />
+      ))}
+    </div>
+  );
+}
+
+// ===== FILE: src/inngest/functions.ts =====
+
+import { databaseService } from '~/services/database-service';
+import { s3Service } from '~/services/s3-services';
+import { videoProcessingService } from '~/services/video-processing-service';
+import type { ProcessVideoEventData } from '~/types/video-pocessing';
+import { inngest } from './client';
+
+export const processVideo = inngest.createFunction(
+  {
+    id: 'process-video',
+    retries: 1,
+    concurrency: {
+      limit: 1,
+      key: 'event.data.userId',
+    },
+  },
+  { event: 'process-video-events' },
+  async ({ event, step }) => {
+    const { uploadedFileId } = event.data as ProcessVideoEventData;
+
+    try {
+      // Step 1: Validate user credits and get file info
+      const { userId, credits, s3Key } = await step.run('check-user-credits', async () => {
+        return await databaseService.getUserCreditsAndS3Key(uploadedFileId);
+      });
+
+      // Early return if no credits
+      if (credits <= 0) {
+        await step.run('set-status-no-credits', async () => {
+          await databaseService.updateFileStatus(uploadedFileId, 'no credits');
+        });
+        return;
+      }
+
+      // Step 2: Set status to processing
+      await step.run('set-status-processing', async () => {
+        await databaseService.updateFileStatus(uploadedFileId, 'processing');
+      });
+
+      // Step 3: Process video
+      await step.run('process-video-external', async () => {
+        await videoProcessingService.processVideo(s3Key);
+      });
+
+      // Step 4: Create clips in database
+      const clipsCreated = await step.run('create-clips-in-db', async () => {
+        const folderPrefix = s3Service.getFolderPrefix(s3Key);
+        const allKeys = await s3Service.listObjectsByPrefix(folderPrefix);
+        const clipKeys = s3Service.getClipKeys(allKeys);
+
+        return await databaseService.createClips(clipKeys, uploadedFileId, userId);
+      });
+
+      // Step 5: Deduct credits
+      await step.run('deduct-user-credits', async () => {
+        const creditsToDeduct = Math.min(credits, clipsCreated);
+        await databaseService.deductUserCredits(userId, creditsToDeduct);
+      });
+
+      // Step 6: Mark as processed
+      await step.run('set-status-processed', async () => {
+        await databaseService.updateFileStatus(uploadedFileId, 'processed');
+      });
+    } catch (error) {
+      console.error('Video processing failed: ', error);
+
+      // Ensure status is set to failed even if this step fails
+      try {
+        await databaseService.updateFileStatus(uploadedFileId, 'failed');
+      } catch (statusUpdateError) {
+        console.error('Failed to update status to failed', statusUpdateError);
+
+        // Re-throw to get Inngest handle retries
+        throw error;
+      }
+    }
+  },
+);
+
+
+// ===== FILE: src/inngest/client.ts =====
+
+import { Inngest } from 'inngest';
+
+// Create a client to send and receive events
+export const inngest = new Inngest({ id: 'ai-podcast-clipper-frontend' });
+
+
+// ===== FILE: src/schemas/auth.ts =====
+
+import { z } from 'zod';
+
+export const signupSchema = z.object({
+  email: z.string().email('Please enter a valid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+});
+
+export const loginSchema = z.object({
+  email: z.string().email('Please enter a valid email address'),
+  password: z.string().min(1, 'Password is required'),
+});
+
+export type SignupFormValues = z.infer<typeof signupSchema>;
+export type LoginFormValues = z.infer<typeof loginSchema>;
+
+
+// ===== FILE: src/types/video-pocessing.ts =====
+
+export interface ProcessVideoEventData {
+  uploadedFileId: string;
+  userId: string;
+}
+
+export interface UserCreditsData {
+  userId: string;
+  credits: number;
+  s3Key: string;
+}
+
+export type FileStatus = 'processing' | 'processed' | 'no credits' | 'failed';
+
+
+// ===== FILE: src/server/db.ts =====
+
+import { PrismaClient } from '@prisma/client';
+
+import { env } from '~/env';
+
+const createPrismaClient = () =>
+  new PrismaClient({
+    log: env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+  });
+
+const globalForPrisma = globalThis as unknown as {
+  prisma: ReturnType<typeof createPrismaClient> | undefined;
+};
+
+export const db = globalForPrisma.prisma ?? createPrismaClient();
+
+if (env.NODE_ENV !== 'production') globalForPrisma.prisma = db;
+
+
+// ===== FILE: src/server/auth/config.ts =====
+
+import { PrismaAdapter } from '@auth/prisma-adapter';
+import { type DefaultSession, type NextAuthConfig } from 'next-auth';
+import CredentialsProvider from 'next-auth/providers/credentials';
+import { comparePasswords } from '~/lib/auth';
+
+import { db } from '~/server/db';
+
+/**
+ * Module augmentation for `next-auth` types. Allows us to add custom properties to the `session`
+ * object and keep type safety.
+ *
+ * @see https://next-auth.js.org/getting-started/typescript#module-augmentation
+ */
+declare module 'next-auth' {
+  interface Session extends DefaultSession {
+    user: {
+      id: string;
+      // ...other properties
+      // role: UserRole;
+    } & DefaultSession['user'];
+  }
+
+  // interface User {
+  //   // ...other properties
+  //   // role: UserRole;
+  // }
+}
+
+/**
+ * Options for NextAuth.js used to configure adapters, providers, callbacks, etc.
+ *
+ * @see https://next-auth.js.org/configuration/options
+ */
+export const authConfig = {
+  providers: [
+    CredentialsProvider({
+      name: 'credentials',
+      credentials: {
+        email: { label: 'Email', type: 'email' },
+        password: { label: 'Password', type: 'password' },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) {
+          return null;
+        }
+
+        const email = credentials.email as string;
+        const password = credentials.password as string;
+
+        const user = await db.user.findUnique({
+          where: { email },
+        });
+
+        if (!user) {
+          return null;
+        }
+
+        const passwordMatch = await comparePasswords(password, user.password);
+        if (!passwordMatch) return null;
+
+        return user;
+      },
+    }),
+  ],
+  session: { strategy: 'jwt' },
+  adapter: PrismaAdapter(db),
+  callbacks: {
+    session: ({ session, token }) => ({
+      ...session,
+      user: {
+        ...session.user,
+        id: token.sub,
+      },
+    }),
+    jwt: ({ token, user }) => {
+      if (user) {
+        token.id = user.id;
+      }
+      return token;
+    },
+  },
+} satisfies NextAuthConfig;
+
+
+// ===== FILE: src/server/auth/index.ts =====
+
+import NextAuth from 'next-auth';
+import { cache } from 'react';
+
+import { authConfig } from './config';
+
+const { auth: uncachedAuth, handlers, signIn, signOut } = NextAuth(authConfig);
+
+const auth = cache(uncachedAuth);
+
+export { auth, handlers, signIn, signOut };
+
+
+// ===== FILE: src/lib/utils.ts =====
+
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
+
+// ===== FILE: src/lib/auth.ts =====
+
+import bcrypt from 'bcryptjs';
+import { z } from 'zod';
+
+export async function hashPassword(password: string): Promise<string> {
+  const saltRounds = 12;
+  return bcrypt.hash(password, saltRounds);
+}
+
+export async function comparePasswords(
+  plainPassword: string,
+  hashedPassword: string,
+): Promise<boolean> {
+  return bcrypt.compare(plainPassword, hashedPassword);
+}
+
+export function validateEmail(email: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email) && email.length <= 254;
+}
+
+export function validatePassword(password: string): {
+  isValid: boolean;
+  errors: string[];
+} {
+  const errors: string[] = [];
+
+  if (password.length < 8) {
+    errors.push('Password must be at least 8 characters long');
+  }
+
+  if (password.length > 128) {
+    errors.push('Password must be less than 128 characters');
+  }
+
+  if (!/(?=.*[a-z])/.test(password)) {
+    errors.push('Password must contain at least one lowercase letter');
+  }
+
+  if (!/(?=.*[A-Z])/.test(password)) {
+    errors.push('Password must contain at least one uppercase letter');
+  }
+
+  if (!/(?=.*\d)/.test(password)) {
+    errors.push('Password must contain at least one number');
+  }
+
+  if (!/(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?])/.test(password)) {
+    errors.push('Password must contain at least one special character');
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+  };
+}
+
+
+// ===== FILE: src/env.js =====
+
+import { createEnv } from "@t3-oss/env-nextjs";
+import { z } from "zod";
+
+export const env = createEnv({
+  /**
+   * Specify your server-side environment variables schema here. This way you can ensure the app
+   * isn't built with invalid env vars.
+   */
+  server: {
+    AUTH_SECRET:
+      process.env.NODE_ENV === "production"
+        ? z.string()
+        : z.string().optional(),
+    DATABASE_URL: z.string().url(),
+    NODE_ENV: z
+      .enum(["development", "test", "production"])
+      .default("development"),
+    AWS_ACCESS_KEY_ID: z.string(),
+    AWS_SECRET_ACCESS_KEY: z.string(),
+    AWS_REGION: z.string(),
+    S3_BUCKET_NAME: z.string(),
+    PROCESS_VIDEO_ENDPOINT: z.string(),
+    PROCESS_VIDEO_ENDPOINT_AUTH: z.string(),
+    STRIPE_SECRET_KEY: z.string(),
+    STRIPE_SMALL_CREDIT_PACK: z.string(),
+    STRIPE_MEDIUM_CREDIT_PACK: z.string(),
+    STRIPE_LARGE_CREDIT_PACK: z.string(),
+    BASE_URL: z.string(),
+    STRIPE_WEBHOOK_SECRET: z.string(),
+  },
+
+  /**
+   * Specify your client-side environment variables schema here. This way you can ensure the app
+   * isn't built with invalid env vars. To expose them to the client, prefix them with
+   * `NEXT_PUBLIC_`.
+   */
+  client: {
+    // NEXT_PUBLIC_CLIENTVAR: z.string(),
+    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string(),
+  },
+
+  /**
+   * You can't destruct `process.env` as a regular object in the Next.js edge runtimes (e.g.
+   * middlewares) or client-side so we need to destruct manually.
+   */
+  runtimeEnv: {
+    AUTH_SECRET: process.env.AUTH_SECRET,
+    DATABASE_URL: process.env.DATABASE_URL,
+    NODE_ENV: process.env.NODE_ENV,
+    AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
+    AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
+    AWS_REGION: process.env.AWS_REGION,
+    S3_BUCKET_NAME: process.env.S3_BUCKET_NAME,
+    PROCESS_VIDEO_ENDPOINT: process.env.PROCESS_VIDEO_ENDPOINT,
+    PROCESS_VIDEO_ENDPOINT_AUTH: process.env.PROCESS_VIDEO_ENDPOINT_AUTH,
+    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:
+      process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+    STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
+    STRIPE_SMALL_CREDIT_PACK: process.env.STRIPE_SMALL_CREDIT_PACK,
+    STRIPE_MEDIUM_CREDIT_PACK: process.env.STRIPE_MEDIUM_CREDIT_PACK,
+    STRIPE_LARGE_CREDIT_PACK: process.env.STRIPE_LARGE_CREDIT_PACK,
+    BASE_URL: process.env.BASE_URL,
+    STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
+  },
+  /**
+   * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially
+   * useful for Docker builds.
+   */
+  skipValidation: !!process.env.SKIP_ENV_VALIDATION,
+  /**
+   * Makes it so that empty strings are treated as undefined. `SOME_VAR: z.string()` and
+   * `SOME_VAR=''` will throw an error.
+   */
+  emptyStringAsUndefined: true,
+});
