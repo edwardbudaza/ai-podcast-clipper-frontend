@@ -1,5 +1,4 @@
 import bcrypt from 'bcryptjs';
-import { z } from 'zod';
 
 export async function hashPassword(password: string): Promise<string> {
   const saltRounds = 12;

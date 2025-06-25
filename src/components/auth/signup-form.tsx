@@ -1,19 +1,18 @@
 'use client';
 
-import { cn } from '~/lib/utils';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { signIn } from 'next-auth/react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { signUp } from '~/actions/auth';
+import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
-import { Button } from '~/components/ui/button';
-import { z } from 'zod';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useState } from 'react';
-import Link from 'next/link';
+import { cn } from '~/lib/utils';
 import { signupSchema, type SignupFormValues } from '~/schemas/auth';
-import { signUp } from '~/actions/auth';
-import { signIn } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
 
 export function SignupForm({ className, ...props }: React.ComponentPropsWithoutRef<'div'>) {
   const [error, setError] = useState<string | null>(null);

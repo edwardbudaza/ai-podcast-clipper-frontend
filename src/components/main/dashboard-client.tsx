@@ -1,16 +1,17 @@
 'use client';
 
-import Dropzone, { type DropzoneState } from 'shadcn-dropzone';
 import type { Clip } from '@prisma/client';
-import Link from 'next/link';
-import { Button } from '~/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { Loader2, UploadCloud } from 'lucide-react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { generateUploadUrl } from '~/actions/s3';
+import Dropzone, { type DropzoneState } from 'shadcn-dropzone';
 import { toast } from 'sonner';
 import { processVideo } from '~/actions/generation';
+import { generateUploadUrl } from '~/actions/s3';
+import { Badge } from '~/components/ui/badge';
+import { Button } from '~/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import {
   Table,
   TableBody,
@@ -19,8 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table';
-import { Badge } from '~/components/ui/badge';
-import { useRouter } from 'next/navigation';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import { ClipDisplay } from './clip-display';
 
 export function DashboardClient({
@@ -123,7 +123,7 @@ export function DashboardClient({
               <Dropzone
                 onDrop={handleDrop}
                 accept={{ 'video/mp4': ['.mp4'] }}
-                maxSize={500 * 1024 * 1024}
+                maxSize={2 * 1024 * 1024 * 1024}
                 disabled={uploading}
                 maxFiles={1}
               >
@@ -133,7 +133,7 @@ export function DashboardClient({
                       <UploadCloud className="text-muted-foreground h-12 w-12" />
                       <p className="font-medium">Drag and drop your file</p>
                       <p className="text-muted-foreground text-sm">
-                        or click to browse (MP4 up to 500MB)
+                        or click to browse (MP4 up to 2GB)
                       </p>
                       <Button
                         className="cursor-pointer"
